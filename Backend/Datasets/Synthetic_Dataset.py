@@ -74,8 +74,8 @@ def generate_dataset(
                 arima = random_walk_timeseries(length=length) + linear_timeseries(
                     length=length
                 )
-                current_date = format_and_save(
-                    arima.pd_series().to_frame(),
+                format_and_save(
+                    arima.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/ARIMA_series_{i}.csv",
@@ -85,8 +85,8 @@ def generate_dataset(
                 sarimax = sine_timeseries(length=length) + linear_timeseries(
                     length=length
                 )
-                current_date = format_and_save(
-                    sarimax.pd_series().to_frame(),
+                format_and_save(
+                    sarimax.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/SARIMAX_series_{i}.csv",
@@ -96,8 +96,8 @@ def generate_dataset(
                 ets = linear_timeseries(
                     length=length, start_value=10, end_value=30
                 ) + sine_timeseries(length=length, value_amplitude=2.5)
-                current_date = format_and_save(
-                    ets.pd_series().to_frame(),
+                format_and_save(
+                    ets.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/ETS_series_{i}.csv",
@@ -107,9 +107,9 @@ def generate_dataset(
                 stl = linear_timeseries(
                     length=length, start_value=0, end_value=20
                 ) + sine_timeseries(length=length, value_amplitude=3)
-                stl_vals = stl.pd_series()
+                stl_vals = stl.to_series()
                 stl_vals.iloc[length // 2 :] += 5
-                current_date = format_and_save(
+                format_and_save(
                     stl_vals.to_frame(),
                     current_date,
                     length,
@@ -125,8 +125,8 @@ def generate_dataset(
                     length=length // 2, start_value=10, end_value=40, start=next_start
                 )
                 prophet = part1.append(part2) + sine_timeseries(length=length)
-                current_date = format_and_save(
-                    prophet.pd_series().to_frame(),
+                format_and_save(
+                    prophet.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/Prophet_series_{i}.csv",
@@ -136,8 +136,8 @@ def generate_dataset(
                 lstm = sine_timeseries(
                     length=length, value_amplitude=5
                 ) + gaussian_timeseries(length=length, std=1.0)
-                current_date = format_and_save(
-                    lstm.pd_series().to_frame(),
+                format_and_save(
+                    lstm.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/LSTM_series_{i}.csv",
@@ -145,12 +145,12 @@ def generate_dataset(
 
                 # GARCH
                 garch = gaussian_timeseries(length=length, std=1.0)
-                garch_vals = garch.pd_series()
+                garch_vals = garch.to_series()
                 garch_vals.iloc[length // 2 :] += pd.Series(
                     [j * 0.1 for j in range(length // 2)],
                     index=garch_vals.index[length // 2 :],
                 )
-                current_date = format_and_save(
+                format_and_save(
                     garch_vals.to_frame(),
                     current_date,
                     length,
@@ -161,8 +161,8 @@ def generate_dataset(
                 xgb = sine_timeseries(
                     length=length, value_frequency=0.08
                 ) + gaussian_timeseries(length=length, std=0.5)
-                current_date = format_and_save(
-                    xgb.pd_series().to_frame(),
+                format_and_save(
+                    xgb.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/XGBoost_series_{i}.csv",
@@ -170,8 +170,8 @@ def generate_dataset(
 
                 # Naive
                 naive = random_walk_timeseries(length=length)
-                current_date = format_and_save(
-                    naive.pd_series().to_frame(),
+                format_and_save(
+                    naive.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/Naive_series_{i}.csv",
@@ -181,8 +181,8 @@ def generate_dataset(
                 seasonal = sine_timeseries(
                     length=length, value_amplitude=6.0, value_frequency=0.1
                 )
-                current_date = format_and_save(
-                    seasonal.pd_series().to_frame(),
+                format_and_save(
+                    seasonal.to_series().to_frame(),
                     current_date,
                     length,
                     f"{output_dir}/SeasonalNaive_series_{i}.csv",
@@ -192,6 +192,8 @@ def generate_dataset(
                 logging.error(
                     f"Error generating series for index {i}: {e}", exc_info=True
                 )
+
+            current_date = current_date + timedelta(days=length)
 
     except Exception as e:
         logging.critical(
@@ -204,4 +206,4 @@ def generate_dataset(
 
 
 if __name__ == "__main__":
-    generate_dataset(start_date="2000-01-01")
+    generate_dataset(start_date="1900-01-01")
