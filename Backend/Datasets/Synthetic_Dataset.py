@@ -4,7 +4,7 @@ import numpy as np
 import logging
 from tqdm import tqdm
 import pandas as pd
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from darts.utils.timeseries_generation import (
     linear_timeseries,
@@ -31,16 +31,25 @@ def setup_logging(output_dir, log_name="generation.log"):
 
 
 def format_and_save(df, current_date, length, file_path):
-    date_index = pd.date_range(start=current_date, periods=length, freq="D")
-    current_date += timedelta(days=length)
-    df.index = date_index
+    randomized_datetime = []
+    for day_offset in range(length):
+        date = current_date + timedelta(days=day_offset)
+        hour = random.randint(0, 23)
+        minute = random.randint(0, 59)
+        second = random.randint(0, 59)
+        dt = datetime.combine(date.date(), datetime.min.time()) + timedelta(
+            hours=hour, minutes=minute, seconds=second
+        )
+        randomized_datetime.append(dt)
+
+    df.index = pd.to_datetime(randomized_datetime)
     df.index.name = "timestamp"
     df.columns = ["point_values"]
     df.reset_index().to_csv(file_path, index=False, date_format="%Y-%m-%dT%H:%M:%S")
-    return current_date
+    return current_date + timedelta(days=length)
 
 
-def generate_darts_dataset(
+def generate_dataset(
     per_model=500,
     length=100,
     output_dir="synthetic_data",
@@ -51,7 +60,7 @@ def generate_darts_dataset(
     os.makedirs(output_dir, exist_ok=True)
     log_file_path = setup_logging(output_dir)
 
-    total_series = per_model * 10
+    total_series = per_model * length
     current_date = pd.to_datetime(start_date)
 
     logging.info(f"Starting generation of {total_series} synthetic time series...")
@@ -195,4 +204,4 @@ def generate_darts_dataset(
 
 
 if __name__ == "__main__":
-    generate_darts_dataset(start_date="2021-01-01")
+    generate_dataset(start_date="2000-01-01")
