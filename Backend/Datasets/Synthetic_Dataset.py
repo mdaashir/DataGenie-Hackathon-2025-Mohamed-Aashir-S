@@ -4,6 +4,7 @@ import numpy as np
 import logging
 from tqdm import tqdm
 import pandas as pd
+from datetime import timedelta
 
 from darts.utils.timeseries_generation import (
     linear_timeseries,
@@ -29,6 +30,16 @@ def setup_logging(output_dir, log_name="generation.log"):
     return log_path
 
 
+def format_and_save(df, current_date, length, file_path):
+    date_index = pd.date_range(start=current_date, periods=length, freq="D")
+    current_date += timedelta(days=length)
+    df.index = date_index
+    df.index.name = "timestamp"
+    df.columns = ["point_values"]
+    df.reset_index().to_csv(file_path, index=False, date_format="%Y-%m-%dT%H:%M:%S")
+    return current_date
+
+
 def generate_darts_dataset(
     per_model=500,
     length=100,
@@ -41,7 +52,7 @@ def generate_darts_dataset(
     log_file_path = setup_logging(output_dir)
 
     total_series = per_model * 10
-    global_index = pd.date_range(start=start_date, periods=length, freq="D")
+    current_date = pd.to_datetime(start_date)
 
     logging.info(f"Starting generation of {total_series} synthetic time series...")
 
@@ -54,35 +65,47 @@ def generate_darts_dataset(
                 arima = random_walk_timeseries(length=length) + linear_timeseries(
                     length=length
                 )
-                arima_df = arima.pd_series().to_frame(name="value")
-                arima_df.index = global_index
-                arima_df.to_csv(f"{output_dir}/ARIMA_series_{i}.csv")
+                current_date = format_and_save(
+                    arima.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/ARIMA_series_{i}.csv",
+                )
 
                 # SARIMAX
                 sarimax = sine_timeseries(length=length) + linear_timeseries(
                     length=length
                 )
-                sarimax_df = sarimax.pd_series().to_frame(name="value")
-                sarimax_df.index = global_index
-                sarimax_df.to_csv(f"{output_dir}/SARIMAX_series_{i}.csv")
+                current_date = format_and_save(
+                    sarimax.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/SARIMAX_series_{i}.csv",
+                )
 
                 # ETS
                 ets = linear_timeseries(
                     length=length, start_value=10, end_value=30
                 ) + sine_timeseries(length=length, value_amplitude=2.5)
-                ets_df = ets.pd_series().to_frame(name="value")
-                ets_df.index = global_index
-                ets_df.to_csv(f"{output_dir}/ETS_series_{i}.csv")
+                current_date = format_and_save(
+                    ets.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/ETS_series_{i}.csv",
+                )
 
                 # STL+ETS
                 stl = linear_timeseries(
                     length=length, start_value=0, end_value=20
                 ) + sine_timeseries(length=length, value_amplitude=3)
-                stl_shift = stl.pd_series()
-                stl_shift.iloc[length // 2 :] += 5
-                stl_shift_df = stl_shift.to_frame(name="value")
-                stl_shift_df.index = global_index
-                stl_shift_df.to_csv(f"{output_dir}/STL+ETS_series_{i}.csv")
+                stl_vals = stl.pd_series()
+                stl_vals.iloc[length // 2 :] += 5
+                current_date = format_and_save(
+                    stl_vals.to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/STL+ETS_series_{i}.csv",
+                )
 
                 # Prophet
                 part1 = linear_timeseries(
@@ -93,17 +116,23 @@ def generate_darts_dataset(
                     length=length // 2, start_value=10, end_value=40, start=next_start
                 )
                 prophet = part1.append(part2) + sine_timeseries(length=length)
-                prophet_df = prophet.pd_series().to_frame(name="value")
-                prophet_df.index = global_index
-                prophet_df.to_csv(f"{output_dir}/Prophet_series_{i}.csv")
+                current_date = format_and_save(
+                    prophet.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/Prophet_series_{i}.csv",
+                )
 
                 # LSTM
                 lstm = sine_timeseries(
                     length=length, value_amplitude=5
                 ) + gaussian_timeseries(length=length, std=1.0)
-                lstm_df = lstm.pd_series().to_frame(name="value")
-                lstm_df.index = global_index
-                lstm_df.to_csv(f"{output_dir}/LSTM_series_{i}.csv")
+                current_date = format_and_save(
+                    lstm.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/LSTM_series_{i}.csv",
+                )
 
                 # GARCH
                 garch = gaussian_timeseries(length=length, std=1.0)
@@ -112,31 +141,43 @@ def generate_darts_dataset(
                     [j * 0.1 for j in range(length // 2)],
                     index=garch_vals.index[length // 2 :],
                 )
-                garch_df = garch_vals.to_frame(name="value")
-                garch_df.index = global_index
-                garch_df.to_csv(f"{output_dir}/GARCH_series_{i}.csv")
+                current_date = format_and_save(
+                    garch_vals.to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/GARCH_series_{i}.csv",
+                )
 
                 # XGBoost
                 xgb = sine_timeseries(
                     length=length, value_frequency=0.08
                 ) + gaussian_timeseries(length=length, std=0.5)
-                xgb_df = xgb.pd_series().to_frame(name="value")
-                xgb_df.index = global_index
-                xgb_df.to_csv(f"{output_dir}/XGBoost_series_{i}.csv")
+                current_date = format_and_save(
+                    xgb.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/XGBoost_series_{i}.csv",
+                )
 
                 # Naive
                 naive = random_walk_timeseries(length=length)
-                naive_df = naive.pd_series().to_frame(name="value")
-                naive_df.index = global_index
-                naive_df.to_csv(f"{output_dir}/Naive_series_{i}.csv")
+                current_date = format_and_save(
+                    naive.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/Naive_series_{i}.csv",
+                )
 
                 # Seasonal Naive
                 seasonal = sine_timeseries(
                     length=length, value_amplitude=6.0, value_frequency=0.1
                 )
-                seasonal_df = seasonal.pd_series().to_frame(name="value")
-                seasonal_df.index = global_index
-                seasonal_df.to_csv(f"{output_dir}/SeasonalNaive_series_{i}.csv")
+                current_date = format_and_save(
+                    seasonal.pd_series().to_frame(),
+                    current_date,
+                    length,
+                    f"{output_dir}/SeasonalNaive_series_{i}.csv",
+                )
 
             except Exception as e:
                 logging.error(
