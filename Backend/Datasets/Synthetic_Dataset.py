@@ -1,105 +1,153 @@
-import numpy as np
-import pandas as pd
 import os
+import random
+import numpy as np
+import logging
 from tqdm import tqdm
+import pandas as pd
+
+from darts.utils.timeseries_generation import (
+    linear_timeseries,
+    sine_timeseries,
+    random_walk_timeseries,
+    gaussian_timeseries,
+)
+
+def save_timestamp(ts, path, length):
+    df = ts.pd_series().to_frame(name="value")
+    df.index = pd.date_range(start=pd.Timestamp.today().normalize(), periods=length, freq='D')
+    df.to_csv(path)
 
 
-def generate_series(model, length=200, seed=42):
+def set_seed(seed=42):
+    random.seed(seed)
     np.random.seed(seed)
-    t = np.arange(length)
-
-    trend = np.zeros(length)
-    seasonality = np.zeros(length)
-    noise = np.random.normal(0, 1, length)
-
-    if model == "ARIMA":
-        series = np.random.randn(length).cumsum()
-
-    elif model == "SARIMAX":
-        trend = 0.05 * t
-        seasonality = 5 * np.sin(2 * np.pi * t / 12)
-        ar_component = (
-            pd.Series(np.random.randn(length)).rolling(3, min_periods=1).mean()
-        )
-        series = trend + seasonality + ar_component + noise
-
-    elif model == "ETS":
-        trend = np.linspace(10, 20, length)
-        seasonality = 4 * np.sin(2 * np.pi * t / 6)
-        series = trend + seasonality + noise * 0.2
-
-    elif model == "STL+ETS":
-        trend = np.linspace(0, 10, length)
-        trend[length // 2 :] += 5  # Structural break
-        seasonality = 6 * np.sin(2 * np.pi * t / 12)
-        series = trend + seasonality + np.random.normal(0, 0.5, length)
-
-    elif model == "Prophet":
-        trend = np.piecewise(
-            t,
-            [t < length // 2, t >= length // 2],
-            [lambda x: x * 0.1, lambda x: x * 0.3],
-        )
-        seasonality = 5 * np.sin(2 * np.pi * t / 7)
-        missing = np.random.choice(length, size=5, replace=False)
-        series = trend + seasonality + noise
-        series[missing] = np.nan
-        series = pd.Series(series).interpolate().fillna(method="bfill")
-
-    elif model == "LSTM":
-        base = np.sin(t / 3) + np.log1p(t)
-        noise = np.random.normal(0, np.linspace(0.1, 1.5, length))
-        series = base + noise
-
-    elif model == "GARCH":
-        volatility = np.linspace(0.2, 2.0, length)
-        returns = np.random.normal(0, volatility)
-        series = returns.cumsum()
-
-    elif model == "XGBoost":
-        trend = 0.03 * (t**2)
-        rolling = (
-            pd.Series(np.random.randn(length)).rolling(window=5, min_periods=1).mean()
-        )
-        series = trend + rolling + noise
-
-    elif model == "Naive":
-        series = np.random.randn(length).cumsum()
-
-    elif model == "SeasonalNaive":
-        seasonality = 6 * np.sin(2 * np.pi * t / 12)
-        series = seasonality + np.random.normal(0, 0.2, length)
-
-    else:
-        raise ValueError("Unknown model")
-
-    return pd.DataFrame({"timestamp": t, "value": series})
 
 
-def generate_dataset(per_model=500, length=200, output_dir="synthetic_data"):
-    models = [
-        "ARIMA",
-        "SARIMAX",
-        "ETS",
-        "STL+ETS",
-        "Prophet",
-        "LSTM",
-        "GARCH",
-        "XGBoost",
-        "Naive",
-        "SeasonalNaive",
-    ]
+def setup_logging(output_dir, log_name="generation.log"):
+    log_path = os.path.join(output_dir, log_name)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        handlers=[
+            logging.FileHandler(log_path, mode="w"),
+        ],
+    )
+    logging.info("Logging initialized.")
+    return log_path
 
+
+def generate_darts_dataset(
+    per_model=500, length=100, output_dir="synthetic_data", seed=42
+):
+    set_seed(seed)
     os.makedirs(output_dir, exist_ok=True)
+    log_file_path = setup_logging(output_dir)
 
-    for model in tqdm(models, desc="Generating time series"):
-        for i in range(per_model):
-            df = generate_series(model, length=length, seed=i)
-            filename = f"{model}_series_{i}.csv"
-            df.to_csv(os.path.join(output_dir, filename), index=False)
+    total_series = per_model * 10
+    logging.info(f"Starting generation of {total_series} synthetic time series...")
 
-    print(f"\nGenerated {per_model * len(models)} series in '{output_dir}/'")
+    try:
+        for i in tqdm(range(per_model), desc="Generating synthetic series per model"):
+            logging.info(f"Generating set {i + 1}/{per_model}")
+
+            try:
+                # ARIMA
+                arima = random_walk_timeseries(length=length) + linear_timeseries(
+                    length=length
+                )
+                save_timestamp(arima, f"{output_dir}/ARIMA_series_{i}.csv", length)
+                # arima.to_series().to_csv(
+                #     f"{output_dir}/ARIMA_series_{i}.csv", header=False
+                # )
+
+                # SARIMAX
+                sarimax = sine_timeseries(length=length) + linear_timeseries(
+                    length=length
+                )
+                sarimax.to_series().to_csv(
+                    f"{output_dir}/SARIMAX_series_{i}.csv", header=False
+                )
+
+                # ETS
+                ets = linear_timeseries(
+                    length=length, start_value=10, end_value=30
+                ) + sine_timeseries(length=length, value_amplitude=2.5)
+                ets.to_series().to_csv(f"{output_dir}/ETS_series_{i}.csv", header=False)
+
+                # STL+ETS
+                stl = linear_timeseries(
+                    length=length, start_value=0, end_value=20
+                ) + sine_timeseries(length=length, value_amplitude=3)
+                stl_shift = stl.to_series()
+                stl_shift.iloc[length // 2 :] += 5
+                stl_shift.to_csv(f"{output_dir}/STL+ETS_series_{i}.csv", header=False)
+
+                # Prophet
+                part1 = linear_timeseries(
+                    length=length // 2, start_value=0, end_value=10
+                )
+                next_start = part1.end_time() + part1.freq
+                part2 = linear_timeseries(
+                    length=length // 2, start_value=10, end_value=40, start=next_start
+                )
+                prophet = part1.append(part2) + sine_timeseries(length=length)
+                prophet.to_series().to_csv(
+                    f"{output_dir}/Prophet_series_{i}.csv", header=False
+                )
+
+                # LSTM
+                lstm = sine_timeseries(
+                    length=length, value_amplitude=5
+                ) + gaussian_timeseries(length=length, std=1.0)
+                lstm.to_series().to_csv(
+                    f"{output_dir}/LSTM_series_{i}.csv", header=False
+                )
+
+                # GARCH
+                garch = gaussian_timeseries(length=length, std=1.0)
+                garch_vals = garch.to_series()
+                garch_vals.iloc[length // 2 :] += pd.Series(
+                    [j * 0.1 for j in range(length // 2)],
+                    index=garch_vals.index[length // 2 :],
+                )
+                garch_vals.to_csv(f"{output_dir}/GARCH_series_{i}.csv", header=False)
+
+                # XGBoost
+                xgb = sine_timeseries(
+                    length=length, value_frequency=0.08
+                ) + gaussian_timeseries(length=length, std=0.5)
+                xgb.to_series().to_csv(
+                    f"{output_dir}/XGBoost_series_{i}.csv", header=False
+                )
+
+                # Naive
+                naive = random_walk_timeseries(length=length)
+                naive.to_series().to_csv(
+                    f"{output_dir}/Naive_series_{i}.csv", header=False
+                )
+
+                # Seasonal Naive
+                seasonal = sine_timeseries(
+                    length=length, value_amplitude=6.0, value_frequency=0.1
+                )
+                seasonal.to_series().to_csv(
+                    f"{output_dir}/SeasonalNaive_series_{i}.csv", header=False
+                )
+
+            except Exception as e:
+                logging.error(
+                    f"Error generating series for index {i}: {e}", exc_info=True
+                )
+
+    except Exception as e:
+        logging.critical(
+            "Fatal error during dataset generation!" + str(e), exc_info=True
+        )
+
+    logging.info(
+        f"\n Done! {total_series} time series saved in '{output_dir}/'. Log: '{log_file_path}'"
+    )
 
 
 if __name__ == "__main__":
-    generate_dataset()
+    generate_darts_dataset()
