@@ -208,4 +208,4 @@ def generate_dataset(
 
 
 if __name__ == "__main__":
-    generate_dataset(start_date="1900-01-01")
+    generate_dataset(start_date="1677-09-22", per_model=2135)
