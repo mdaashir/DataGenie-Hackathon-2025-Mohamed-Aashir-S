@@ -20,6 +20,7 @@ def set_seed(seed=42):
 
 
 def setup_logging(output_dir, log_name="generation.log"):
+    os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, log_name)
     logging.basicConfig(
         level=logging.INFO,
@@ -31,6 +32,7 @@ def setup_logging(output_dir, log_name="generation.log"):
 
 
 def format_and_save(df, current_date, length, file_path):
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     randomized_datetime = []
     for day_offset in range(length):
         date = current_date + timedelta(days=day_offset)
@@ -46,19 +48,19 @@ def format_and_save(df, current_date, length, file_path):
     df.index.name = "timestamp"
     df.columns = ["point_values"]
     df.reset_index().to_csv(file_path, index=False, date_format="%Y-%m-%dT%H:%M:%S")
-    return current_date + timedelta(days=length)
 
 
 def generate_dataset(
     per_model=500,
     length=100,
     output_dir="synthetic_data",
+    log_dir="logs",
     seed=42,
     start_date="2020-01-01",
 ):
     set_seed(seed)
     os.makedirs(output_dir, exist_ok=True)
-    log_file_path = setup_logging(output_dir)
+    log_file_path = setup_logging(log_dir)
 
     total_series = per_model * length
     current_date = pd.to_datetime(start_date)
@@ -78,7 +80,7 @@ def generate_dataset(
                     arima.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/ARIMA_series_{i}.csv",
+                    f"{output_dir}/ARIMA/ARIMA_series_{i}.csv",
                 )
 
                 # SARIMAX
@@ -89,7 +91,7 @@ def generate_dataset(
                     sarimax.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/SARIMAX_series_{i}.csv",
+                    f"{output_dir}/SARIMAX/SARIMAX_series_{i}.csv",
                 )
 
                 # ETS
@@ -100,7 +102,7 @@ def generate_dataset(
                     ets.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/ETS_series_{i}.csv",
+                    f"{output_dir}/ETS/ETS_series_{i}.csv",
                 )
 
                 # STL+ETS
@@ -113,7 +115,7 @@ def generate_dataset(
                     stl_vals.to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/STL+ETS_series_{i}.csv",
+                    f"{output_dir}/STL+ETS/STL+ETS_series_{i}.csv",
                 )
 
                 # Prophet
@@ -129,7 +131,7 @@ def generate_dataset(
                     prophet.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/Prophet_series_{i}.csv",
+                    f"{output_dir}/Prophet/Prophet_series_{i}.csv",
                 )
 
                 # LSTM
@@ -140,7 +142,7 @@ def generate_dataset(
                     lstm.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/LSTM_series_{i}.csv",
+                    f"{output_dir}/LSTM/LSTM_series_{i}.csv",
                 )
 
                 # GARCH
@@ -154,7 +156,7 @@ def generate_dataset(
                     garch_vals.to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/GARCH_series_{i}.csv",
+                    f"{output_dir}/GARCH/GARCH_series_{i}.csv",
                 )
 
                 # XGBoost
@@ -165,7 +167,7 @@ def generate_dataset(
                     xgb.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/XGBoost_series_{i}.csv",
+                    f"{output_dir}/XGBoost/XGBoost_series_{i}.csv",
                 )
 
                 # Naive
@@ -174,7 +176,7 @@ def generate_dataset(
                     naive.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/Naive_series_{i}.csv",
+                    f"{output_dir}/Naive/Naive_series_{i}.csv",
                 )
 
                 # Seasonal Naive
@@ -185,7 +187,7 @@ def generate_dataset(
                     seasonal.to_series().to_frame(),
                     current_date,
                     length,
-                    f"{output_dir}/SeasonalNaive_series_{i}.csv",
+                    f"{output_dir}/SeasonalNaive/SeasonalNaive_series_{i}.csv",
                 )
 
             except Exception as e:

@@ -1,3 +1,4 @@
+import glob
 import pandas as pd
 import numpy as np
 from scipy.stats import skew, kurtosis, entropy, normaltest
@@ -10,9 +11,10 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.signal import welch
 import pywt
 import nolds
+from tqdm import tqdm
+
 
 def extract_features(x):
-    # Rename and standardize
     x = x.copy()
     x.columns = ["timestamp", "point_values"]
     x["point_values"] = x["point_values"].astype(float)
@@ -26,7 +28,7 @@ def extract_features(x):
     y = x["scaled"]
     t = np.arange(len(y)).reshape(-1, 1)
 
-    # Basic stats
+    # Basic statistics
     mean = np.mean(y)
     std = np.std(y)
     var = np.var(y)
@@ -114,7 +116,7 @@ def extract_features(x):
 
     # Complexity / Entropy
     try:
-        sampen = nolds.sampen(y)
+        sampen = nolds.sampen(y, tolerance=0.3)
     except:
         sampen = 0.0
 
@@ -168,3 +170,46 @@ def extract_features(x):
     features.update(diff_stats)
 
     return pd.Series(features)
+
+
+def add_extracted_features(output_dir="synthetic_data"):
+    models = [
+        "ARIMA",
+        "SARIMAX",
+        "ETS",
+        "STL+ETS",
+        "Prophet",
+        "LSTM",
+        "GARCH",
+        "XGBoost",
+        "Naive",
+        "SeasonalNaive",
+    ]
+
+    for model in tqdm(models, desc="Processing models"):
+        model_df = pd.DataFrame()
+        files = glob.glob(f"{output_dir}/{model}/{model}_series_*.csv")
+        for file in tqdm(files, desc=f"{model}", leave=False):
+            try:
+                df = pd.read_csv(file)
+                features = extract_features(df)
+                features["Label"] = model
+                model_df = pd.concat(
+                    [model_df, pd.DataFrame([features])], ignore_index=True
+                )
+            except Exception as e:
+                tqdm.write(f"Error in {file}: {e}")
+
+        model_df.dropna(inplace=True)
+
+        save_path = f"{output_dir}/{model}.csv"
+        if not model_df.empty:
+            model_df.to_csv(save_path, index=False)
+            tqdm.write(f"Saved {save_path} with shape {model_df.shape}")
+        else:
+            tqdm.write(f"No valid data for {model}. Skipping save.")
+
+    print("\nAll model features extracted and saved.")
+
+if __name__ == "__main__":
+    add_extracted_features()
