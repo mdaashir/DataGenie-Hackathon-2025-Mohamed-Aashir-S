@@ -33,7 +33,7 @@ def setup_logging(output_dir, log_name="generation.log"):
 
 def format_and_save(df, current_date, length, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    randomized_datetime = []
+    timestamps = []
     for day_offset in range(length):
         date = current_date + timedelta(days=day_offset)
         hour = random.randint(0, 23)
@@ -42,12 +42,11 @@ def format_and_save(df, current_date, length, file_path):
         dt = datetime.combine(date.date(), datetime.min.time()) + timedelta(
             hours=hour, minutes=minute, seconds=second
         )
-        randomized_datetime.append(dt)
-
-    df.index = pd.to_datetime(randomized_datetime)
-    df.index.name = "timestamp"
-    df.columns = ["point_values"]
-    df.reset_index().to_csv(file_path, index=False, date_format="%Y-%m-%dT%H:%M:%S")
+        timestamps.append(dt.strftime("%Y-%m-%dT%H:%M:%S"))
+    df["timestamp"] = timestamps
+    df.columns = ["point_values", "timestamp"]
+    df = df[["timestamp", "point_values"]]
+    df.to_csv(file_path, index=False)
 
 
 def generate_dataset(
@@ -63,7 +62,7 @@ def generate_dataset(
     log_file_path = setup_logging(log_dir)
 
     total_series = per_model * length
-    current_date = pd.to_datetime(start_date)
+    current_date = datetime.strptime(start_date, "%Y-%m-%d")
 
     logging.info(f"Starting generation of {total_series} synthetic time series...")
 
@@ -208,4 +207,4 @@ def generate_dataset(
 
 
 if __name__ == "__main__":
-    generate_dataset(start_date="1677-09-22", per_model=2135)
+    generate_dataset(start_date="1500-01-01", per_model=5000, length=750)
