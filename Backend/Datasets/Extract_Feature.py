@@ -1,178 +1,225 @@
+import os
 import glob
-import pandas as pd
+import logging
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 from scipy.stats import skew, kurtosis, entropy, normaltest
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, PolynomialFeatures
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
 from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.signal import welch
 import pywt
 import nolds
-from tqdm import tqdm
+
+
+def setup_logging(output_dir, log_name="feature_extraction.log"):
+    os.makedirs(output_dir, exist_ok=True)
+    log_path = os.path.join(output_dir, log_name)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(message)s",
+        handlers=[
+            logging.FileHandler(log_path, mode="w"),
+        ],
+    )
+    logging.info("Feature extraction logging initialized.")
+    return log_path
 
 
 def extract_features(x):
-    x = x.copy()
-    x.columns = ["timestamp", "point_values"]
-    x["point_values"] = x["point_values"].astype(float)
-
-    # Scale
-    scaler = StandardScaler()
-    values = scaler.fit_transform(x["point_values"].values.reshape(-1, 1)).flatten()
-    x["scaled"] = values
-
-    # Store base series
-    y = x["scaled"]
-    t = np.arange(len(y)).reshape(-1, 1)
-
-    # Basic statistics
-    mean = np.mean(y)
-    std = np.std(y)
-    var = np.var(y)
-    skewness = skew(y)
-    kurt = kurtosis(y)
-    mode = pd.Series(y).mode().iloc[0]
-    median = np.median(y)
-
-    # Stationarity
-    adf_stat, adf_pval, _, _, _, _ = adfuller(y)
-    stationary = adf_pval <= 0.05
-
-    # Trend
-    linreg = LinearRegression().fit(t, y)
-    slope = linreg.coef_[0]
-    poly = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(t, y)
-    poly_coef = poly.named_steps["linearregression"].coef_.tolist()
-
-    # Differencing
-    diff = np.diff(y)
-    diff_stats = {
-        "diff_mean": np.mean(diff),
-        "diff_std": np.std(diff),
-        "diff_skew": skew(diff),
-        "diff_kurtosis": kurtosis(diff),
-        "diff_entropy": entropy(np.histogram(diff, bins=10)[0] + 1),
-    }
-
-    # Rolling window volatility
-    roll_std = pd.Series(y).rolling(window=5).std().dropna()
-    vol_mean = roll_std.mean()
-    vol_trend = roll_std.iloc[-1] - roll_std.iloc[0]
-
-    # ACF/PACF
-    acf_vals = acf(y, nlags=5)
-    pacf_vals = pacf(y, nlags=5)
-    acf_peaks = int(sum(np.abs(acf_vals[1:]) > 0.25))
-    dominant_acf_lag = int(np.argmax(np.abs(acf_vals[1:])) + 1)
-    pacf_peaks = int(sum(np.abs(pacf_vals[1:]) > 0.25))
-
-    # Seasonal decomposition
     try:
-        result = seasonal_decompose(
-            y, period=12, model="additive", extrapolate_trend="freq"
-        )
-        seasonal = result.seasonal
-        trend = result.trend
-        resid = result.resid
-    except:
-        seasonal = trend = resid = pd.Series([0] * len(y))
+        x = x.copy()
+        x.columns = ["timestamp", "point_values"]
+        x["point_values"] = x["point_values"].astype(float)
 
-    seasonal_stats = {
-        "seasonal_strength": np.var(seasonal),
-        "seasonal_max": np.max(seasonal),
-        "seasonal_min": np.min(seasonal),
-    }
+        # Scale
+        scaler = StandardScaler()
+        values = scaler.fit_transform(x["point_values"].values.reshape(-1, 1)).flatten()
+        x["scaled"] = values
 
-    trend_stats = {
-        "trend_strength": np.var(trend),
-        "trend_max": np.nanmax(trend),
-        "trend_min": np.nanmin(trend),
-    }
+        # Store base series
+        y = x["scaled"]
+        t = np.arange(len(y)).reshape(-1, 1)
 
-    residual_stats = {
-        "residual_var": np.var(resid),
-        "residual_max": np.nanmax(resid),
-        "residual_min": np.nanmin(resid),
-    }
+        # Basic statistics
+        mean = np.mean(y)
+        std = np.std(y)
+        var = np.var(y)
+        skewness = skew(y)
+        kurt = kurtosis(y)
+        mode = pd.Series(y).mode().iloc[0]
+        median = np.median(y)
 
-    # Spectral features (FFT)
-    fft = np.fft.fft(y)
-    fft_freq = np.fft.fftfreq(len(y))
-    peak_freq = float(fft_freq[np.argmax(np.abs(fft))])
+        # Stationarity
+        try:
+            adf_stat, adf_pval, *_ = adfuller(y)
+            stationary = adf_pval <= 0.05
+        except Exception as e:
+            logging.warning(f"ADF test failed: {e}")
+            adf_pval = 1.0
+            stationary = False
 
-    # PSD / Welch
-    f_welch, psd = welch(y, nperseg=min(64, len(y)))
-    psd_entropy = entropy(psd + 1e-6)
+        # Trend
+        slope = LinearRegression().fit(t, y).coef_[0]
+        poly = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(t, y)
+        poly_coef = poly.named_steps["linearregression"].coef_.tolist()
 
-    # Wavelet
-    ca, cd = pywt.dwt(y, "db1")
-    wavelet_stats = {
-        "cA_mean": np.mean(ca),
-        "cD_var": np.var(cd),
-    }
+        # Differencing
+        diff = np.diff(y)
+        diff_stats = {
+            "diff_mean": np.mean(diff),
+            "diff_std": np.std(diff),
+            "diff_skew": skew(diff),
+            "diff_kurtosis": kurtosis(diff),
+            "diff_entropy": entropy(np.histogram(diff, bins=10)[0] + 1),
+        }
+        # Rolling window volatility
 
-    # Complexity / Entropy
-    try:
-        sampen = nolds.sampen(y, tolerance=0.3)
-    except:
-        sampen = 0.0
+        roll_std = pd.Series(y).rolling(window=5).std().dropna()
+        vol_mean = roll_std.mean()
+        vol_trend = roll_std.iloc[-1] - roll_std.iloc[0]
 
-    # Lag correlation
-    lag1_corr = pd.Series(y).autocorr(lag=1)
-    lag2_corr = pd.Series(y).autocorr(lag=2)
+        # ACF/PACF
+        try:
+            acf_vals = acf(y, nlags=5)
+            pacf_vals = pacf(y, nlags=5)
+        except Exception as e:
+            logging.warning(f"ACF/PACF failed: {e}")
+            acf_vals = np.zeros(6)
+            pacf_vals = np.zeros(6)
 
-    # Residual normality
-    try:
-        resid_pval = float(normaltest(resid.dropna())[1])
-    except:
-        resid_pval = 1.0
+        acf_peaks = int(sum(np.abs(acf_vals[1:]) > 0.25))
+        pacf_peaks = int(sum(np.abs(pacf_vals[1:]) > 0.25))
+        dominant_acf_lag = int(np.argmax(np.abs(acf_vals[1:])) + 1)
+        # Seasonal decomposition
+        try:
+            result = seasonal_decompose(
+                y, period=12, model="additive", extrapolate_trend="freq"
+            )
+            seasonal = result.seasonal
+            trend = result.trend
+            resid = result.resid
+        except Exception as e:
+            logging.warning(f"Seasonal decomposition failed: {e}")
+            seasonal = trend = resid = pd.Series([0] * len(y))
 
-    # Compile all features
-    features = {
-        "mean": mean,
-        "std_dev": std,
-        "variance": var,
-        "skewness": skewness,
-        "kurtosis": kurt,
-        "mode": mode,
-        "median": median,
-        "stationary_adf_pval": adf_pval,
-        "stationary": stationary,
-        "slope": slope,
-        "vol_mean": vol_mean,
-        "vol_trend": vol_trend,
-        "acf_peak_count": acf_peaks,
-        "pacf_peak_count": pacf_peaks,
-        "dominant_acf_lag": dominant_acf_lag,
-        "seasonal_strength": seasonal_stats["seasonal_strength"],
-        "trend_strength": trend_stats["trend_strength"],
-        "residual_var": residual_stats["residual_var"],
-        "peak_frequency_fft": peak_freq,
-        "spectral_entropy": psd_entropy,
-        "sample_entropy": sampen,
-        "lag1_corr": lag1_corr,
-        "lag2_corr": lag2_corr,
-        "residuals_normality_pval": resid_pval,
-        "wavelet_cA_mean": wavelet_stats["cA_mean"],
-        "wavelet_cD_var": wavelet_stats["cD_var"],
-    }
+        seasonal_stats = {
+            "seasonal_strength": np.var(seasonal),
+            "seasonal_max": np.max(seasonal),
+            "seasonal_min": np.min(seasonal),
+        }
 
-    # Add flattened poly coefficients and ACF/PACF
-    for i, val in enumerate(poly_coef):
-        features[f"poly_coef_{i}"] = val
-    for i, val in enumerate(acf_vals):
-        features[f"acf_lag_{i}"] = val
-    for i, val in enumerate(pacf_vals):
-        features[f"pacf_lag_{i}"] = val
-    features.update(diff_stats)
+        trend_stats = {
+            "trend_strength": np.var(trend),
+            "trend_max": np.nanmax(trend),
+            "trend_min": np.nanmin(trend),
+        }
 
-    return pd.Series(features)
+        residual_stats = {
+            "residual_var": np.var(resid),
+            "residual_max": np.nanmax(resid),
+            "residual_min": np.nanmin(resid),
+        }
+
+        # Spectral features (FFT)
+        fft = np.fft.fft(y)
+        fft_freq = np.fft.fftfreq(len(y))
+        peak_freq = float(fft_freq[np.argmax(np.abs(fft))])
+
+        # PSD / Welch
+        try:
+            _, psd = welch(y, nperseg=min(64, len(y)))
+            psd_entropy = entropy(psd + 1e-6)
+        except Exception as e:
+            logging.warning(f"Welch PSD failed: {e}")
+            psd_entropy = 0.0
+
+        # Wavelet
+        try:
+            ca, cd = pywt.dwt(y, "db1")
+            wavelet_stats = {
+                "cA_mean": np.mean(ca),
+                "cD_var": np.var(cd),
+            }
+        except Exception as e:
+            logging.warning(f"Wavelet transform failed: {e}")
+            wavelet_stats = {"cA_mean": 0.0, "cD_var": 0.0}
+
+        # Complexity / Entropy
+        try:
+            sampen = nolds.sampen(y, tolerance=0.3)
+        except Exception as e:
+            logging.warning(f"Sample entropy failed: {e}")
+            sampen = 0.0
+
+        # Lag correlation
+        try:
+            lag1_corr = pd.Series(y).autocorr(lag=1)
+            lag2_corr = pd.Series(y).autocorr(lag=2)
+        except Exception as e:
+            logging.warning(f"Lag correlation failed: {e}")
+            lag1_corr = lag2_corr = 0.0
+
+        # Residual normality
+        try:
+            resid_pval = float(normaltest(resid.dropna())[1])
+        except Exception as e:
+            logging.warning(f"Normality test failed: {e}")
+            resid_pval = 1.0
+
+        # Compile all features
+        features = {
+            "mean": mean,
+            "std_dev": std,
+            "variance": var,
+            "skewness": skewness,
+            "kurtosis": kurt,
+            "mode": mode,
+            "median": median,
+            "stationary_adf_pval": adf_pval,
+            "stationary": stationary,
+            "slope": slope,
+            "vol_mean": vol_mean,
+            "vol_trend": vol_trend,
+            "acf_peak_count": acf_peaks,
+            "pacf_peak_count": pacf_peaks,
+            "dominant_acf_lag": dominant_acf_lag,
+            "seasonal_strength": seasonal_stats["seasonal_strength"],
+            "trend_strength": trend_stats["trend_strength"],
+            "residual_var": residual_stats["residual_var"],
+            "peak_frequency_fft": peak_freq,
+            "spectral_entropy": psd_entropy,
+            "sample_entropy": sampen,
+            "lag1_corr": lag1_corr,
+            "lag2_corr": lag2_corr,
+            "residuals_normality_pval": resid_pval,
+            "wavelet_cA_mean": wavelet_stats["cA_mean"],
+            "wavelet_cD_var": wavelet_stats["cD_var"],
+        }
+
+        # Add flattened poly coefficients and ACF/PACF
+        for i, val in enumerate(poly_coef):
+            features[f"poly_coef_{i}"] = val
+        for i, val in enumerate(acf_vals):
+            features[f"acf_lag_{i}"] = val
+        for i, val in enumerate(pacf_vals):
+            features[f"pacf_lag_{i}"] = val
+        features.update(diff_stats)
+
+        logging.info("Feature extraction successful.")
+        return pd.Series(features)
+
+    except Exception as e:
+        logging.error(f"Feature extraction failed: {e}", exc_info=True)
+        raise
 
 
-def add_extracted_features(output_dir="synthetic_data"):
+def add_extracted_features(output_dir="synthetic_data", log_dir="logs"):
+    log_file = setup_logging(log_dir)
+
     models = [
         "ARIMA",
         "SARIMAX",
@@ -189,6 +236,11 @@ def add_extracted_features(output_dir="synthetic_data"):
     for model in tqdm(models, desc="Processing models"):
         model_df = pd.DataFrame()
         files = glob.glob(f"{output_dir}/{model}/{model}_series_*.csv")
+        logging.info(f"\n--- Processing model: {model} | Found {len(files)} files ---")
+
+        success_count = 0
+        fail_count = 0
+
         for file in tqdm(files, desc=f"{model}", leave=False):
             try:
                 df = pd.read_csv(file)
@@ -197,7 +249,11 @@ def add_extracted_features(output_dir="synthetic_data"):
                 model_df = pd.concat(
                     [model_df, pd.DataFrame([features])], ignore_index=True
                 )
+                success_count += 1
+                logging.info(f"Successfully extracted features from: {file}")
             except Exception as e:
+                fail_count += 1
+                logging.error(f"Error processing file {file}: {e}", exc_info=True)
                 tqdm.write(f"Error in {file}: {e}")
 
         model_df.dropna(inplace=True)
@@ -205,11 +261,18 @@ def add_extracted_features(output_dir="synthetic_data"):
         save_path = f"{output_dir}/{model}.csv"
         if not model_df.empty:
             model_df.to_csv(save_path, index=False)
-            tqdm.write(f"Saved {save_path} with shape {model_df.shape}")
+            tqdm.write(f"\nSaved {save_path} with shape {model_df.shape}")
+            logging.info(f"Saved features for {model} to {save_path}")
         else:
             tqdm.write(f"No valid data for {model}. Skipping save.")
+            logging.warning(f"No valid data extracted for model: {model}")
 
-    print("\nAll model features extracted and saved.")
+        logging.info(
+            f"Finished {model} | Success: {success_count} | Failures: {fail_count}"
+        )
+
+    logging.info(f"\nDone! All model features extracted and saved.  Log: '{log_file}'")
+
 
 if __name__ == "__main__":
     add_extracted_features()
