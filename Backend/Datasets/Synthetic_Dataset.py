@@ -52,7 +52,7 @@ def generate_dataset(
     per_model=500,
     length=100,
     output_dir="synthetic_data",
-    log_dir="../logs",
+    log_dir="../Logs",
     seed=42,
     start_date="2020-01-01",
 ):

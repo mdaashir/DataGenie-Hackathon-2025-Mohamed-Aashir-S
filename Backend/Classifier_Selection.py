@@ -5,13 +5,15 @@ from glob import glob
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
+import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -31,15 +33,13 @@ from sklearn.metrics import (
 )
 from imblearn.over_sampling import SMOTE
 
+# Models
 models = {
     "Random Forest": RandomForestClassifier(
         n_estimators=200, n_jobs=-1, random_state=42
     ),
     "XGBoost": XGBClassifier(
-        n_estimators=200,
-        n_jobs=-1,
-        random_state=42,
-        eval_metric="mlogloss"
+        n_estimators=200, n_jobs=-1, random_state=42, eval_metric="mlogloss"
     ),
     "LightGBM": LGBMClassifier(n_estimators=200, n_jobs=-1, random_state=42),
     "MLP": MLPClassifier(hidden_layer_sizes=(100,), max_iter=500, random_state=42),
@@ -56,9 +56,7 @@ def setup_logging(output_dir, log_name="classifier_selection.log"):
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[
-            logging.FileHandler(log_path, mode="w"),
-        ],
+        handlers=[logging.FileHandler(log_path, mode="w")],
     )
     logging.info("Classifier selection logging initialized.")
     return log_path
@@ -87,7 +85,10 @@ def load_dataset_and_labels(folder_path):
     return full_data.drop(columns=["Label"]), full_data["Label"]
 
 
-def evaluate_model(x_train, x_test, y_train, y_test):
+def evaluate_model(
+    x_train, x_test, y_train, y_test, label_classes, output_dir="Results/reports"
+):
+    os.makedirs(output_dir, exist_ok=True)
     metrics_list = []
 
     for name, model in models.items():
@@ -102,6 +103,14 @@ def evaluate_model(x_train, x_test, y_train, y_test):
             logloss = log_loss(y_test, y_prob)
         except Exception:
             roc_auc, top3_acc, logloss = None, None, None
+
+        try:
+            cv_scores = cross_val_score(
+                model, x_train, y_train, cv=5, scoring="f1_weighted"
+            )
+            cv_f1_weighted = np.mean(cv_scores)
+        except Exception:
+            cv_f1_weighted = None
 
         report = classification_report(y_test, y_pred, zero_division=0)
 
@@ -127,6 +136,7 @@ def evaluate_model(x_train, x_test, y_train, y_test):
             "F1 Score (weighted)": f1_score(
                 y_test, y_pred, average="weighted", zero_division=0
             ),
+            "CV F1 Score (weighted)": cv_f1_weighted,
             "Cohen Kappa": cohen_kappa_score(y_test, y_pred),
             "MCC": matthews_corrcoef(y_test, y_pred),
             "Hamming Loss": hamming_loss(y_test, y_pred),
@@ -146,32 +156,37 @@ def evaluate_model(x_train, x_test, y_train, y_test):
 
         metrics_list.append(metrics)
 
+        # Save confusion matrix and classification report
+        plot_confusion_matrix(metrics["Confusion Matrix"], label_classes, name)
+        with open(f"{output_dir}/{name}_classification_report.txt", "w") as f:
+            f.write(report)
+
         logging.info(f"{name} Results:")
-        plot_confusion_matrix(metrics["Confusion Matrix"], label_encoder.classes_, name)
         for k, v in metrics.items():
             if k not in ["Model", "Confusion Matrix", "Classification Report"]:
                 logging.info(
-                    f"   {k:<20}: {v:.4f}"
+                    f"   {k:<25}: {v:.4f}"
                     if isinstance(v, float)
-                    else f"   {k:<20}: {v}"
+                    else f"   {k:<25}: {v}"
                 )
 
     return metrics_list
 
 
-def plot_feature_importance(model, features_name, top_n=20, output_dir="results"):
+def plot_feature_importance(model, features_name, top_n=20, output_dir="Results/plots"):
     os.makedirs(output_dir, exist_ok=True)
-    importance = model.feature_importances_
-    indices = importance.argsort()[-top_n:][::-1]
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x=importance[indices], y=[features_name[i] for i in indices])
-    plt.title("Top Feature Importance")
-    plt.tight_layout()
-    plt.show()
-    plt.savefig(f"{output_dir}/feature_importance.png")
+    if hasattr(model, "feature_importances_"):
+        importance = model.feature_importances_
+        indices = importance.argsort()[-top_n:][::-1]
+        plt.figure(figsize=(10, 6))
+        sns.barplot(x=importance[indices], y=[features_name[i] for i in indices])
+        plt.title("Top Feature Importance")
+        plt.tight_layout()
+        plt.savefig(f"{output_dir}/feature_importance.png")
+        plt.close()
 
 
-def plot_confusion_matrix(cm, labels, model_name, output_dir="results"):
+def plot_confusion_matrix(cm, labels, model_name, output_dir="Results/images"):
     os.makedirs(output_dir, exist_ok=True)
     plt.figure(figsize=(8, 6))
     sns.heatmap(
@@ -184,10 +199,11 @@ def plot_confusion_matrix(cm, labels, model_name, output_dir="results"):
     plt.savefig(f"{output_dir}/{model_name}_confusion_matrix.png")
     plt.close()
 
-def classifier_selection():
-    log_file = setup_logging("logs")
 
+def classifier_selection():
+    log_file = setup_logging("Logs")
     logging.info("Starting classifier selection...")
+
     try:
         logging.info("Loading dataset and labels...")
         x, y = load_dataset_and_labels("Datasets/synthetic_data")
@@ -196,15 +212,18 @@ def classifier_selection():
         logging.info("Normalizing features...")
         x = scaler.fit_transform(x)
 
+        stratify_option = y if len(set(y)) > 1 else None
         X_train, X_test, Y_train, Y_test = train_test_split(
-            x, y, test_size=0.2, stratify=y, random_state=42
+            x, y, test_size=0.2, stratify=stratify_option, random_state=42
         )
 
         logging.info("Applying SMOTE to balance classes...")
         smote = SMOTE(random_state=42)
         X_train, Y_train = smote.fit_resample(X_train, Y_train)
 
-        summary_metrics = evaluate_model(X_train, X_test, Y_train, Y_test)
+        summary_metrics = evaluate_model(
+            X_train, X_test, Y_train, Y_test, label_encoder.classes_
+        )
 
         df_results = pd.DataFrame(summary_metrics)
         df_results_sorted = df_results.sort_values(
@@ -227,19 +246,27 @@ def classifier_selection():
             ].to_string(index=False)
         )
 
-        df_results_sorted.to_csv("results/model_comparison_results.csv", index=False)
-        logging.info("Results saved to 'model_comparison_results.csv'.")
+        os.makedirs("Results", exist_ok=True)
+        df_results_sorted.to_csv("Results/model_comparison_results.csv", index=False)
+        logging.info("Results saved to 'Results/model_comparison_results.csv'.")
 
         best_model_name = df_results_sorted.iloc[0]["Model"]
         best_model = models[best_model_name]
-        logging.info(f"Plotting feature importance for best model: {best_model_name}")
         best_model.fit(X_train, Y_train)
+
+        logging.info(f"Saving best model: {best_model_name}")
+        joblib.dump(best_model, f"Results/best_model_{best_model_name}.pkl")
+
+        logging.info(f"Plotting feature importance for best model: {best_model_name}")
         plot_feature_importance(best_model, feature_names)
 
     except Exception as e:
         logging.critical(f"Pipeline failed: {e}")
 
-    logging.info(f"\nDone! Classifier selection completed successfully.  Log: '{log_file}'")
+    logging.info(
+        f"\nDone! Classifier selection completed successfully.  Log: '{log_file}'"
+    )
+
 
 if __name__ == "__main__":
     classifier_selection()
