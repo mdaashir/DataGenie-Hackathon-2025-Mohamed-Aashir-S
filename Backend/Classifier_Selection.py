@@ -1,4 +1,5 @@
 import os
+from itertools import cycle
 import pandas as pd
 import logging
 from glob import glob
@@ -7,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 import numpy as np
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.preprocessing import LabelEncoder, StandardScaler, label_binarize
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
@@ -29,7 +30,7 @@ from sklearn.metrics import (
     jaccard_score,
     log_loss,
     top_k_accuracy_score,
-    zero_one_loss,
+    zero_one_loss, roc_curve, auc,
 )
 from imblearn.over_sampling import SMOTE
 
@@ -91,16 +92,21 @@ def evaluate_model(
     os.makedirs(output_dir, exist_ok=True)
     metrics_list = []
 
-    for name, model in models.items():
+    for name, model in tqdm(list(models.items()), desc="Training models", ncols=100):
         logging.info(f"\nTraining and evaluating: {name}...")
         model.fit(x_train, y_train)
         y_pred = model.predict(x_test)
 
         try:
             y_prob = model.predict_proba(x_test)
-            roc_auc = roc_auc_score(y_test, y_prob, multi_class="ovr")
-            top3_acc = top_k_accuracy_score(y_test, y_prob, k=3)
-            logloss = log_loss(y_test, y_prob)
+            roc_auc = roc_auc_score(
+                y_test, y_prob, multi_class="ovr", average="weighted"
+            )
+            plot_multiclass_roc(y_test, y_prob, label_classes, name)
+            top3_acc = top_k_accuracy_score(
+                y_test, y_prob, k=3, labels=np.unique(y_test)
+            )
+            logloss = log_loss(y_test, y_prob, labels=np.unique(y_test))
         except Exception:
             roc_auc, top3_acc, logloss = None, None, None
 
@@ -156,7 +162,7 @@ def evaluate_model(
 
         metrics_list.append(metrics)
 
-        # Save confusion matrix and classification report
+        logging.info("Saving confusion matrix and classification report...")
         plot_confusion_matrix(metrics["Confusion Matrix"], label_classes, name)
         with open(f"{output_dir}/{name}_classification_report.txt", "w") as f:
             f.write(report)
@@ -177,13 +183,26 @@ def plot_feature_importance(model, features_name, top_n=20, output_dir="Results/
     os.makedirs(output_dir, exist_ok=True)
     if hasattr(model, "feature_importances_"):
         importance = model.feature_importances_
-        indices = importance.argsort()[-top_n:][::-1]
-        plt.figure(figsize=(10, 6))
-        sns.barplot(x=importance[indices], y=[features_name[i] for i in indices])
-        plt.title("Top Feature Importance")
-        plt.tight_layout()
-        plt.savefig(f"{output_dir}/feature_importance.png")
-        plt.close()
+    elif hasattr(model, "coef_"):
+        coef = model.coef_
+        if coef.ndim == 1:
+            importance = np.abs(coef)
+        else:
+            importance = np.mean(np.abs(coef), axis=0)
+    else:
+        logging.warning(
+            f"Feature importance not available for model: {type(model).__name__}"
+        )
+        return
+
+    indices = np.argsort(importance)[-top_n:][::-1]
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=importance[indices], y=[features_name[i] for i in indices])
+    plt.title(f"Top {top_n} Feature Importances")
+    plt.tight_layout()
+    logging.info("Saving feature importance plot...")
+    plt.savefig(f"{output_dir}/feature_importance.png")
+    plt.close()
 
 
 def plot_confusion_matrix(cm, labels, model_name, output_dir="Results/images"):
@@ -196,7 +215,46 @@ def plot_confusion_matrix(cm, labels, model_name, output_dir="Results/images"):
     plt.ylabel("True label")
     plt.xlabel("Predicted label")
     plt.tight_layout()
+    logging.info("Saving confusion matrix plot...")
     plt.savefig(f"{output_dir}/{model_name}_confusion_matrix.png")
+    plt.close()
+
+
+def plot_multiclass_roc(y_true, y_score, class_names, model_name, output_dir="Results/plots"):
+    os.makedirs(output_dir, exist_ok=True)
+    n_classes = len(class_names)
+
+    y_true_bin = label_binarize(y_true, classes=list(range(n_classes)))
+
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
+    for i in range(n_classes):
+        fpr[i], tpr[i], _ = roc_curve(y_true_bin[:, i], y_score[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    plt.figure(figsize=(10, 8))
+    colors = cycle(plt.cm.tab10.colors)
+
+    for i, color in zip(range(n_classes), colors):
+        plt.plot(
+            fpr[i],
+            tpr[i],
+            color=color,
+            lw=2,
+            label=f"Class {class_names[i]} (AUC = {roc_auc[i]:.2f})",
+        )
+
+    plt.plot([0, 1], [0, 1], "k--", lw=1)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title(f"ROC Curve - {model_name}")
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    logging.info("Saving ROC curve plot...")
+    plt.savefig(f"{output_dir}/{model_name}_multiclass_ROC.png")
     plt.close()
 
 
