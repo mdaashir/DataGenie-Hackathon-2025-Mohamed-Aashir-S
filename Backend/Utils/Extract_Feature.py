@@ -205,6 +205,11 @@ def extract_features(x):
         logging.error(f"Feature extraction failed: {e}", exc_info=True)
         raise
 
+try:
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    transform = joblib.load(f"{RESULTS_DIR}/feature_extractor.pkl")
+except FileNotFoundError:
+    joblib.dump(extract_features, f"{RESULTS_DIR}/feature_extractor.pkl")
 
 def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
     os.makedirs(output_dir, exist_ok=True)
@@ -235,9 +240,10 @@ def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
                 df = pd.read_csv(file)
                 features = transform(df)
                 features["Label"] = model
-                model_df = pd.concat(
-                    [model_df, pd.DataFrame([features])], ignore_index=True
-                )
+                if isinstance(features, pd.DataFrame):
+                    model_df = pd.concat([model_df, features], ignore_index=True)
+                else:
+                    model_df = pd.concat([model_df, pd.DataFrame([features])], ignore_index=True)
                 success_count += 1
                 logging.info(f"Successfully extracted features from: {file}")
             except Exception as e:
@@ -264,10 +270,4 @@ def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
 
 
 if __name__ == "__main__":
-    try:
-        os.makedirs(RESULTS_DIR, exist_ok=True)
-        transform = joblib.load(f"{RESULTS_DIR}/feature_extractor.pkl")
-    except FileNotFoundError:
-        joblib.dump(extract_features, f"{RESULTS_DIR}/feature_extractor.pkl")
-
     add_extracted_features()
