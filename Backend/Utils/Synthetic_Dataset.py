@@ -1,36 +1,23 @@
 import os
 import random
 import numpy as np
-import logging
 from tqdm import tqdm
 import pandas as pd
 from datetime import datetime, timedelta
-
 from darts.utils.timeseries_generation import (
     linear_timeseries,
     sine_timeseries,
     random_walk_timeseries,
     gaussian_timeseries,
 )
-from Backend import LOGS_DIR, DATASET_DIR
+from Backend import DATASET_DIR
+from Backend.Utils.Logger import setup_logging
 
+log_file_path, logging = setup_logging(log_name="generation.log")
 
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
-
-
-def setup_logging(output_dir=LOGS_DIR, log_name="generation.log"):
-    os.makedirs(output_dir, exist_ok=True)
-    log_path = os.path.join(output_dir, log_name)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[logging.FileHandler(log_path, mode="w")],
-    )
-    logging.info("Logging initialized.")
-    return log_path
-
 
 def format_and_save(df, current_date, length, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -58,7 +45,6 @@ def generate_dataset(
 ):
     set_seed(seed)
     os.makedirs(output_dir, exist_ok=True)
-    log_file_path = setup_logging()
 
     total_series = per_model * length
     current_date = datetime.strptime(start_date, "%Y-%m-%d")

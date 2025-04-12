@@ -1,6 +1,4 @@
-import os
 import glob
-import logging
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -13,22 +11,10 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.signal import welch
 import pywt
 import nolds
-from Backend import LOGS_DIR, DATASET_DIR
+from Backend import DATASET_DIR
+from Backend.Utils.Logger import setup_logging
 
-
-def setup_logging(output_dir=LOGS_DIR, log_name="feature_extraction.log"):
-    os.makedirs(output_dir, exist_ok=True)
-    log_path = os.path.join(output_dir, log_name)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[
-            logging.FileHandler(log_path, mode="w"),
-        ],
-    )
-    logging.info("Feature extraction logging initialized.")
-    return log_path
-
+log_file, logging = setup_logging(log_name="feature_extraction.log")
 
 def extract_features(x):
     try:
@@ -211,7 +197,7 @@ def extract_features(x):
         features.update(diff_stats)
 
         logging.info("Feature extraction successful.")
-        return pd.Series(features)
+        return pd.DataFrame([features])
 
     except Exception as e:
         logging.error(f"Feature extraction failed: {e}", exc_info=True)
@@ -219,7 +205,6 @@ def extract_features(x):
 
 
 def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
-    log_file = setup_logging()
 
     models = [
         "ARIMA",

@@ -1,7 +1,6 @@
 import os
 from itertools import cycle
 import pandas as pd
-import logging
 from glob import glob
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -33,7 +32,8 @@ from sklearn.metrics import (
     zero_one_loss, roc_curve, auc,
 )
 from imblearn.over_sampling import SMOTE
-from Backend import LOGS_DIR, RESULTS_DIR, DATASET_DIR
+from Backend import RESULTS_DIR, DATASET_DIR
+from Backend.Utils.Logger import setup_logging
 
 # Models
 models = {
@@ -50,19 +50,7 @@ models = {
 
 label_encoder = LabelEncoder()
 scaler = StandardScaler()
-
-
-def setup_logging(output_dir=LOGS_DIR, log_name="classifier_selection.log"):
-    os.makedirs(output_dir, exist_ok=True)
-    log_path = os.path.join(output_dir, log_name)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[logging.FileHandler(log_path, mode="w")],
-    )
-    logging.info("Classifier selection logging initialized.")
-    return log_path
-
+log_file, logging = setup_logging(log_name="classifier_selection.log")
 
 def load_dataset_and_labels(folder_path):
     files = glob(os.path.join(folder_path, "*.csv"))
@@ -260,7 +248,6 @@ def plot_multiclass_roc(y_true, y_score, class_names, model_name, output_dir=f"{
 
 
 def classifier_selection():
-    log_file = setup_logging()
     logging.info("Starting classifier selection...")
 
     try:
@@ -314,7 +301,7 @@ def classifier_selection():
         best_model.fit(X_train, Y_train)
 
         logging.info(f"Saving best model: {best_model_name}")
-        joblib.dump(best_model, f"{RESULTS_DIR}/best_model_{best_model_name}.pkl")
+        joblib.dump(best_model, f"{RESULTS_DIR}/best_model.pkl")
 
         logging.info(f"Plotting feature importance for best model: {best_model_name}")
         plot_feature_importance(best_model, feature_names)
