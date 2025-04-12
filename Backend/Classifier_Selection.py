@@ -14,6 +14,10 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    balanced_accuracy_score,
+    cohen_kappa_score,
+    matthews_corrcoef,
+    hamming_loss,
     classification_report,
     confusion_matrix,
 )
@@ -56,31 +60,69 @@ models = {
 
 
 def evaluate_model():
+    metrics_list = []
 
     for name, model in models.items():
         print(f"\nTraining and evaluating: {name}...")
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
 
-        acc = accuracy_score(y_test, y_pred)
-        prec = precision_score(y_test, y_pred, average="weighted", zero_division=0)
-        rec = recall_score(y_test, y_pred, average="weighted", zero_division=0)
-        f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
-        report = classification_report(
-            y_test, y_pred, output_dict=True, zero_division=0
-        )
-        cm = confusion_matrix(y_test, y_pred)
+        report = classification_report(y_test, y_pred, zero_division=0)
+
+        metrics = {
+            "Model": name,
+            "Accuracy": accuracy_score(y_test, y_pred),
+            "Balanced Accuracy": balanced_accuracy_score(y_test, y_pred),
+            "Precision (macro)": precision_score(
+                y_test, y_pred, average="macro", zero_division=0
+            ),
+            "Recall (macro)": recall_score(
+                y_test, y_pred, average="macro", zero_division=0
+            ),
+            "F1 Score (macro)": f1_score(
+                y_test, y_pred, average="macro", zero_division=0
+            ),
+            "Precision (weighted)": precision_score(
+                y_test, y_pred, average="weighted", zero_division=0
+            ),
+            "Recall (weighted)": recall_score(
+                y_test, y_pred, average="weighted", zero_division=0
+            ),
+            "F1 Score (weighted)": f1_score(
+                y_test, y_pred, average="weighted", zero_division=0
+            ),
+            "Cohen Kappa": cohen_kappa_score(y_test, y_pred),
+            "MCC": matthews_corrcoef(y_test, y_pred),
+            "Hamming Loss": hamming_loss(y_test, y_pred),
+            "Confusion Matrix": confusion_matrix(y_test, y_pred),
+            "Classification Report": report,
+        }
+
+        metrics_list.append(metrics)
 
         print(f"{name} Results:")
-        print(f"Accuracy: {acc:.4f}")
-        print(f"Precision: {prec:.4f}")
-        print(f"Recall: {rec:.4f}")
-        print(f"F1 Score: {f1:.4f}")
-        print(f"Macro F1: {report['macro avg']['f1-score']:.4f}")
-        print(f"Weighted F1: {report['weighted avg']['f1-score']:.4f}")
-        print(f"Confusion Matrix:\n{cm}")
-        print(classification_report(y_test, y_pred))
+        for k, v in metrics.items():
+            if k not in ["Model", "Confusion Matrix", "Classification Report"]:
+                print(f"   {k:<20}: {v:.4f}")
+
+    return metrics_list
 
 
 if __name__ == "__main__":
-    evaluate_model()
+    summary_metrics = evaluate_model()
+    print("\nOverall Model Comparison:")
+    df_results = pd.DataFrame(summary_metrics)
+    df_results_sorted = df_results.sort_values(
+        by="F1 Score (weighted)", ascending=False
+    )
+    print(
+        df_results_sorted[
+            [
+                "Model",
+                "F1 Score (weighted)",
+                "Accuracy",
+                "Precision (macro)",
+                "Recall (macro)",
+            ]
+        ].to_string(index=False)
+    )

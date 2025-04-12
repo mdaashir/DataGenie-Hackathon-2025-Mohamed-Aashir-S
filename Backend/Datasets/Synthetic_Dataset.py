@@ -34,15 +34,14 @@ def setup_logging(output_dir, log_name="generation.log"):
 def format_and_save(df, current_date, length, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     timestamps = []
-    for day_offset in range(length):
-        date = current_date + timedelta(days=day_offset)
+    base_datetime = datetime.combine(current_date.date(), datetime.min.time())
+    for i in range(length):
+        base_dt = base_datetime + timedelta(days=i)
         hour = random.randint(0, 23)
         minute = random.randint(0, 59)
         second = random.randint(0, 59)
-        dt = datetime.combine(date.date(), datetime.min.time()) + timedelta(
-            hours=hour, minutes=minute, seconds=second
-        )
-        timestamps.append(dt.strftime("%Y-%m-%dT%H:%M:%S"))
+        full_dt = base_dt + timedelta(hours=hour, minutes=minute, seconds=second)
+        timestamps.append(full_dt.strftime("%Y-%m-%dT%H:%M:%S"))
     df["timestamp"] = timestamps
     df.columns = ["point_values", "timestamp"]
     df = df[["timestamp", "point_values"]]
@@ -207,4 +206,4 @@ def generate_dataset(
 
 
 if __name__ == "__main__":
-    generate_dataset(start_date="1500-01-01", per_model=5000, length=750)
+    generate_dataset(start_date="0001-01-01", per_model=5000, length=730)
