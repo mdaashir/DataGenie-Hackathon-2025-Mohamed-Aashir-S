@@ -13,9 +13,10 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.signal import welch
 import pywt
 import nolds
+from Backend import LOGS_DIR, DATASET_DIR
 
 
-def setup_logging(output_dir, log_name="feature_extraction.log"):
+def setup_logging(output_dir=LOGS_DIR, log_name="feature_extraction.log"):
     os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, log_name)
     logging.basicConfig(
@@ -217,8 +218,8 @@ def extract_features(x):
         raise
 
 
-def add_extracted_features(output_dir="synthetic_data", log_dir="../Logs"):
-    log_file = setup_logging(log_dir)
+def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
+    log_file = setup_logging()
 
     models = [
         "ARIMA",

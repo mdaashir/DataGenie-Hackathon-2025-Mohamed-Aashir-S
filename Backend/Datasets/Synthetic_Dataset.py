@@ -12,6 +12,7 @@ from darts.utils.timeseries_generation import (
     random_walk_timeseries,
     gaussian_timeseries,
 )
+from Backend import LOGS_DIR, DATASET_DIR
 
 
 def set_seed(seed=42):
@@ -19,7 +20,7 @@ def set_seed(seed=42):
     np.random.seed(seed)
 
 
-def setup_logging(output_dir, log_name="generation.log"):
+def setup_logging(output_dir=LOGS_DIR, log_name="generation.log"):
     os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, log_name)
     logging.basicConfig(
@@ -51,14 +52,13 @@ def format_and_save(df, current_date, length, file_path):
 def generate_dataset(
     per_model=500,
     length=100,
-    output_dir="synthetic_data",
-    log_dir="../Logs",
+    output_dir=f"{DATASET_DIR}/synthetic_data",
     seed=42,
     start_date="2020-01-01",
 ):
     set_seed(seed)
     os.makedirs(output_dir, exist_ok=True)
-    log_file_path = setup_logging(log_dir)
+    log_file_path = setup_logging()
 
     total_series = per_model * length
     current_date = datetime.strptime(start_date, "%Y-%m-%d")

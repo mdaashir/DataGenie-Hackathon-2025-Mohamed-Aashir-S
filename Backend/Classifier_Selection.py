@@ -33,6 +33,7 @@ from sklearn.metrics import (
     zero_one_loss, roc_curve, auc,
 )
 from imblearn.over_sampling import SMOTE
+from Backend import LOGS_DIR, RESULTS_DIR, DATASET_DIR
 
 # Models
 models = {
@@ -51,7 +52,7 @@ label_encoder = LabelEncoder()
 scaler = StandardScaler()
 
 
-def setup_logging(output_dir, log_name="classifier_selection.log"):
+def setup_logging(output_dir=LOGS_DIR, log_name="classifier_selection.log"):
     os.makedirs(output_dir, exist_ok=True)
     log_path = os.path.join(output_dir, log_name)
     logging.basicConfig(
@@ -87,7 +88,7 @@ def load_dataset_and_labels(folder_path):
 
 
 def evaluate_model(
-    x_train, x_test, y_train, y_test, label_classes, output_dir="Results/reports"
+    x_train, x_test, y_train, y_test, label_classes, output_dir=f"{RESULTS_DIR}/reports"
 ):
     os.makedirs(output_dir, exist_ok=True)
     metrics_list = []
@@ -179,7 +180,7 @@ def evaluate_model(
     return metrics_list
 
 
-def plot_feature_importance(model, features_name, top_n=20, output_dir="Results/plots"):
+def plot_feature_importance(model, features_name, top_n=20, output_dir=f"{RESULTS_DIR}/plots"):
     os.makedirs(output_dir, exist_ok=True)
     if hasattr(model, "feature_importances_"):
         importance = model.feature_importances_
@@ -205,7 +206,7 @@ def plot_feature_importance(model, features_name, top_n=20, output_dir="Results/
     plt.close()
 
 
-def plot_confusion_matrix(cm, labels, model_name, output_dir="Results/images"):
+def plot_confusion_matrix(cm, labels, model_name, output_dir=f"{RESULTS_DIR}/images"):
     os.makedirs(output_dir, exist_ok=True)
     plt.figure(figsize=(8, 6))
     sns.heatmap(
@@ -220,7 +221,7 @@ def plot_confusion_matrix(cm, labels, model_name, output_dir="Results/images"):
     plt.close()
 
 
-def plot_multiclass_roc(y_true, y_score, class_names, model_name, output_dir="Results/plots"):
+def plot_multiclass_roc(y_true, y_score, class_names, model_name, output_dir=f"{RESULTS_DIR}/plots"):
     os.makedirs(output_dir, exist_ok=True)
     n_classes = len(class_names)
 
@@ -259,12 +260,12 @@ def plot_multiclass_roc(y_true, y_score, class_names, model_name, output_dir="Re
 
 
 def classifier_selection():
-    log_file = setup_logging("Logs")
+    log_file = setup_logging()
     logging.info("Starting classifier selection...")
 
     try:
         logging.info("Loading dataset and labels...")
-        x, y = load_dataset_and_labels("Datasets/synthetic_data")
+        x, y = load_dataset_and_labels(f"{DATASET_DIR}/synthetic_data")
         feature_names = x.columns
 
         logging.info("Normalizing features...")
@@ -304,8 +305,8 @@ def classifier_selection():
             ].to_string(index=False)
         )
 
-        os.makedirs("Results", exist_ok=True)
-        df_results_sorted.to_csv("Results/model_comparison_results.csv", index=False)
+        os.makedirs(RESULTS_DIR, exist_ok=True)
+        df_results_sorted.to_csv(f"{RESULTS_DIR}/model_comparison_results.csv", index=False)
         logging.info("Results saved to 'Results/model_comparison_results.csv'.")
 
         best_model_name = df_results_sorted.iloc[0]["Model"]
@@ -313,7 +314,7 @@ def classifier_selection():
         best_model.fit(X_train, Y_train)
 
         logging.info(f"Saving best model: {best_model_name}")
-        joblib.dump(best_model, f"Results/best_model_{best_model_name}.pkl")
+        joblib.dump(best_model, f"{RESULTS_DIR}/best_model_{best_model_name}.pkl")
 
         logging.info(f"Plotting feature importance for best model: {best_model_name}")
         plot_feature_importance(best_model, feature_names)
