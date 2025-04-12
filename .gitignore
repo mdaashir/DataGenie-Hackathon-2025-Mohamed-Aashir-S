@@ -172,4 +172,4 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-Backend/Datasets/synthetic_data/
+Backend/Datasets/

@@ -1,4 +1,8 @@
+import os
 import glob
+import pywt
+import nolds
+import joblib
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -9,9 +13,7 @@ from sklearn.pipeline import make_pipeline
 from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.signal import welch
-import pywt
-import nolds
-from Backend import DATASET_DIR
+from Backend import DATASET_DIR, RESULTS_DIR
 from Backend.Utils.Logger import setup_logging
 
 log_file, logging = setup_logging(log_name="feature_extraction.log")
@@ -205,6 +207,7 @@ def extract_features(x):
 
 
 def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
+    os.makedirs(output_dir, exist_ok=True)
 
     models = [
         "ARIMA",
@@ -230,7 +233,7 @@ def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
         for file in tqdm(files, desc=f"{model}", leave=False):
             try:
                 df = pd.read_csv(file)
-                features = extract_features(df)
+                features = transform(df)
                 features["Label"] = model
                 model_df = pd.concat(
                     [model_df, pd.DataFrame([features])], ignore_index=True
@@ -261,4 +264,10 @@ def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
 
 
 if __name__ == "__main__":
+    try:
+        os.makedirs(RESULTS_DIR, exist_ok=True)
+        transform = joblib.load(f"{RESULTS_DIR}/feature_extractor.pkl")
+    except FileNotFoundError:
+        joblib.dump(extract_features, f"{RESULTS_DIR}/feature_extractor.pkl")
+
     add_extracted_features()
