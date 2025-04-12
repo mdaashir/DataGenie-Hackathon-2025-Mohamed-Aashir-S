@@ -39,7 +39,7 @@ models = {
         n_estimators=200,
         n_jobs=-1,
         random_state=42,
-        eval_metric="mlogloss",
+        eval_metric="mlogloss"
     ),
     "LightGBM": LGBMClassifier(n_estimators=200, n_jobs=-1, random_state=42),
     "MLP": MLPClassifier(hidden_layer_sizes=(100,), max_iter=500, random_state=42),
@@ -147,6 +147,7 @@ def evaluate_model(x_train, x_test, y_train, y_test):
         metrics_list.append(metrics)
 
         logging.info(f"{name} Results:")
+        plot_confusion_matrix(metrics["Confusion Matrix"], label_encoder.classes_, name)
         for k, v in metrics.items():
             if k not in ["Model", "Confusion Matrix", "Classification Report"]:
                 logging.info(
@@ -158,18 +159,33 @@ def evaluate_model(x_train, x_test, y_train, y_test):
     return metrics_list
 
 
-def plot_feature_importance(model, features_name, top_n=20):
-    if hasattr(model, "feature_importance"):
-        importance = model.feature_importances_
-        indices = importance.argsort()[-top_n:][::-1]
-        plt.figure(figsize=(10, 6))
-        sns.barplot(x=importance[indices], y=[features_name[i] for i in indices])
-        plt.title("Top Feature Importance")
-        plt.tight_layout()
-        plt.show()
+def plot_feature_importance(model, features_name, top_n=20, output_dir="results"):
+    os.makedirs(output_dir, exist_ok=True)
+    importance = model.feature_importances_
+    indices = importance.argsort()[-top_n:][::-1]
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=importance[indices], y=[features_name[i] for i in indices])
+    plt.title("Top Feature Importance")
+    plt.tight_layout()
+    plt.show()
+    plt.savefig(f"{output_dir}/feature_importance.png")
 
-if __name__ == "__main__":
-    log_file = setup_logging("Datasets/logs")
+
+def plot_confusion_matrix(cm, labels, model_name, output_dir="results"):
+    os.makedirs(output_dir, exist_ok=True)
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(
+        cm, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels
+    )
+    plt.title(f"Confusion Matrix - {model_name}")
+    plt.ylabel("True label")
+    plt.xlabel("Predicted label")
+    plt.tight_layout()
+    plt.savefig(f"{output_dir}/{model_name}_confusion_matrix.png")
+    plt.close()
+
+def classifier_selection():
+    log_file = setup_logging("logs")
 
     logging.info("Starting classifier selection...")
     try:
@@ -211,15 +227,19 @@ if __name__ == "__main__":
             ].to_string(index=False)
         )
 
-        df_results_sorted.to_csv("model_comparison_results.csv", index=False)
+        df_results_sorted.to_csv("results/model_comparison_results.csv", index=False)
         logging.info("Results saved to 'model_comparison_results.csv'.")
 
         best_model_name = df_results_sorted.iloc[0]["Model"]
         best_model = models[best_model_name]
         logging.info(f"Plotting feature importance for best model: {best_model_name}")
+        best_model.fit(X_train, Y_train)
         plot_feature_importance(best_model, feature_names)
 
     except Exception as e:
         logging.critical(f"Pipeline failed: {e}")
 
     logging.info(f"\nDone! Classifier selection completed successfully.  Log: '{log_file}'")
+
+if __name__ == "__main__":
+    classifier_selection()

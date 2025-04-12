@@ -217,7 +217,7 @@ def extract_features(x):
         raise
 
 
-def add_extracted_features(output_dir="synthetic_data", log_dir="logs"):
+def add_extracted_features(output_dir="synthetic_data", log_dir="../logs"):
     log_file = setup_logging(log_dir)
 
     models = [
