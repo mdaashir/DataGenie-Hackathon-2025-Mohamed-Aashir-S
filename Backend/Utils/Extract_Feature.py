@@ -13,7 +13,7 @@ from sklearn.pipeline import make_pipeline
 from statsmodels.tsa.stattools import adfuller, acf, pacf
 from statsmodels.tsa.seasonal import seasonal_decompose
 from scipy.signal import welch
-from Backend import DATASET_DIR, RESULTS_DIR
+from Backend import DATASET_DIR, MODELS_DIR
 from Backend.Utils.Logger import setup_logging
 
 log_file, logging = setup_logging(log_name="feature_extraction.log")
@@ -206,10 +206,10 @@ def extract_features(x):
         raise
 
 try:
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    transform = joblib.load(f"{RESULTS_DIR}/feature_extractor.pkl")
+    os.makedirs(MODELS_DIR, exist_ok=True)
+    transform = joblib.load(f"{MODELS_DIR}/feature_extractor.pkl")
 except FileNotFoundError:
-    joblib.dump(extract_features, f"{RESULTS_DIR}/feature_extractor.pkl")
+    joblib.dump(extract_features, f"{MODELS_DIR}/feature_extractor.pkl")
 
 def add_extracted_features(output_dir=f"{DATASET_DIR}/synthetic_data"):
     os.makedirs(output_dir, exist_ok=True)

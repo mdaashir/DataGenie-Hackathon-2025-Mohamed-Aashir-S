@@ -32,7 +32,7 @@ from sklearn.metrics import (
     zero_one_loss, roc_curve, auc,
 )
 from imblearn.over_sampling import SMOTE
-from Backend import RESULTS_DIR, DATASET_DIR
+from Backend import RESULTS_DIR, DATASET_DIR, MODELS_DIR
 from Backend.Utils.Logger import setup_logging
 
 # Models
@@ -300,8 +300,9 @@ def classifier_selection():
         best_model = models[best_model_name]
         best_model.fit(X_train, Y_train)
 
+        os.makedirs(MODELS_DIR, exist_ok=True)
         logging.info(f"Saving best model: {best_model_name}")
-        joblib.dump(best_model, f"{RESULTS_DIR}/best_model.pkl")
+        joblib.dump(best_model, f"{MODELS_DIR}/best_model.pkl")
 
         logging.info(f"Plotting feature importance for best model: {best_model_name}")
         plot_feature_importance(best_model, feature_names)
