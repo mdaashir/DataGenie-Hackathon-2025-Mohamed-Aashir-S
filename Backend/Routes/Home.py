@@ -1,8 +1,9 @@
-from fastapi import APIRouter
 from fastapi import status
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 home_router = APIRouter()
 
-@home_router.get("/")
+@home_router.get("")
 def home():
-    return "Heo World", status.HTTP_200_OK
+    return JSONResponse(content={"message":"Hello World"}, status_code=status.HTTP_200_OK)

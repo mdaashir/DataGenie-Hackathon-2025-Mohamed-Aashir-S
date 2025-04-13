@@ -1,6 +1,6 @@
+from fastapi import status
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from fastapi import status
 
 health_router = APIRouter()
 @health_router.get("/health")
