@@ -1,5 +1,8 @@
-from Backend.Routes import router
+from fastapi import APIRouter
+from fastapi import status
 
-@router.get("/")
+home_router = APIRouter()
+
+@home_router.get("/")
 def home():
-    return "Hello World"
+    return "Heo World", status.HTTP_200_OK
