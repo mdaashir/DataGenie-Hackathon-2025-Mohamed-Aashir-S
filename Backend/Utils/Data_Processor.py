@@ -6,15 +6,15 @@ def parse_date(date_str):
 
 def calculate_forecast_period(date_from_ts, date_to_ts, frequency, period):
     if frequency == 'H':
-        return int((date_to_ts - date_from_ts).total_seconds() / 3600) + period + 1
+        return (date_to_ts - date_from_ts).total_seconds() / 3600 + period
     elif frequency == 'D':
-        return (date_to_ts - date_from_ts).days + period + 1
+        return (date_to_ts - date_from_ts).days + period
     elif frequency == 'W':
-        return ((date_to_ts - date_from_ts).days + 1) // 7 + period + 1
+        return ((date_to_ts - date_from_ts).days + 1) // 7 + period
     elif frequency == 'M':
-        return (date_to_ts.year - date_from_ts.year) * 12 + date_to_ts.month - date_from_ts.month + period + 1
+        return (date_to_ts.year - date_from_ts.year) * 12 + date_to_ts.month - date_from_ts.month + period
     elif frequency == 'Y':
-        return date_to_ts.year - date_from_ts.year + period + 1
+        return date_to_ts.year - date_from_ts.year + period
 
 def get_actual_values(data, date_from_ts, frequency, period):
     offsets = {
