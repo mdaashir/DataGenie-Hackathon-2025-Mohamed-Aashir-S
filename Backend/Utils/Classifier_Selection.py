@@ -319,10 +319,19 @@ def classifier_selection():
         stack_model.fit(X_train, Y_train)
 
         logging.info(f"Saving stacked model")
-        joblib.dump(best_model, f"{MODELS_DIR}/stack_model.pkl")
+        joblib.dump(stack_model, f"{MODELS_DIR}/stack_model.pkl")
 
         logging.info(f"Plotting feature importance for stacked model")
         plot_feature_importance(stack_model, feature_names)
+
+        best_model_2 = models["Random Forest"]
+        best_model_2.fit(X_train, Y_train)
+
+        logging.info(f"Saving best model: {best_model_2}")
+        joblib.dump(best_model_2, f"{MODELS_DIR}/best_model_2.pkl")
+
+        logging.info(f"Plotting feature importance for best model")
+        plot_feature_importance(best_model_2, feature_names)
 
 
     except Exception as e:
