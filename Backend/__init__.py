@@ -5,3 +5,4 @@ DATASET_DIR = os.path.join(BASE_DIR, "Datasets")
 LOGS_DIR = os.path.join(BASE_DIR, "Logs")
 RESULTS_DIR = os.path.join(BASE_DIR, "Results")
 MODELS_DIR = os.path.join(BASE_DIR, "Models")
+MODEL_LIST = ["ARIMA", "SARIMAX", "ETS", "STL+ETS", "Prophet", "LSTM", "GARCH", "XGBoost", "Naive", "SeasonalNaive"]
