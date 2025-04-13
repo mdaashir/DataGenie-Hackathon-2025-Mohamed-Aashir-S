@@ -1,9 +1,9 @@
 from pydantic import BaseModel
 from typing import List
 
-class TimeSeriesRow(BaseModel):
+class TimeSeries(BaseModel):
     Date: str
     Value: float
 
 class TimeSeriesData(BaseModel):
-    data: List[TimeSeriesRow]
+    data: List[TimeSeries]
