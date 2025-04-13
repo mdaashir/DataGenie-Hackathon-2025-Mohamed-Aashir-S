@@ -8,7 +8,7 @@ import seaborn as sns
 import joblib
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, StandardScaler, label_binarize
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from sklearn.neural_network import MLPClassifier
@@ -246,6 +246,13 @@ def plot_multiclass_roc(y_true, y_score, class_names, model_name, output_dir=f"{
     plt.savefig(f"{output_dir}/{model_name}_multiclass_ROC.png")
     plt.close()
 
+def stacking_model():
+    model = StackingClassifier(
+        estimators=[(name, model) for name, model in models.items() if name != "Logistic Regression"],
+        final_estimator=models["Logistic Regression"],
+    )
+    return model
+
 
 def classifier_selection():
     logging.info("Starting classifier selection...")
@@ -267,6 +274,7 @@ def classifier_selection():
         smote = SMOTE(random_state=42)
         X_train, Y_train = smote.fit_resample(X_train, Y_train)
 
+        models["Stack"] = stacking_model()
         summary_metrics = evaluate_model(
             X_train, X_test, Y_train, Y_test, label_encoder.classes_
         )
@@ -296,7 +304,7 @@ def classifier_selection():
         df_results_sorted.to_csv(f"{RESULTS_DIR}/model_comparison_results.csv", index=False)
         logging.info("Results saved to 'Results/model_comparison_results.csv'.")
 
-        best_model_name = df_results_sorted.iloc[0]["Model"]
+        best_model_name = df_results_sorted[df_results_sorted["Model"] != "Stack"].iloc[0]["Model"]
         best_model = models[best_model_name]
         best_model.fit(X_train, Y_train)
 
@@ -307,11 +315,21 @@ def classifier_selection():
         logging.info(f"Plotting feature importance for best model: {best_model_name}")
         plot_feature_importance(best_model, feature_names)
 
+        stack_model = models["Stack"]
+        stack_model.fit(X_train, Y_train)
+
+        logging.info(f"Saving stacked model")
+        joblib.dump(best_model, f"{MODELS_DIR}/stack_model.pkl")
+
+        logging.info(f"Plotting feature importance for stacked model")
+        plot_feature_importance(stack_model, feature_names)
+
+
     except Exception as e:
         logging.critical(f"Pipeline failed: {e}")
 
     logging.info(
-        f"\nDone! Classifier selection completed successfully.  Log: '{log_file}'"
+        f"\nDone! Classifier selection and stacking completed successfully. Log: '{log_file}'"
     )
 
 

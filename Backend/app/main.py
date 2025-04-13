@@ -1,7 +1,6 @@
 from fastapi import FastAPI
+from Backend.Routes import router
 
 app = FastAPI()
 
-@app.get("/")
-def home():
-    return "Hello World"
+app.include_router(router)
