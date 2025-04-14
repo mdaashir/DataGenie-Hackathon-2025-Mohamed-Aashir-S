@@ -6,15 +6,15 @@ def parse_date(date_str):
 
 def calculate_forecast_period(date_from_ts, date_to_ts, frequency, period):
     if frequency == 'H':
-        return (date_to_ts - date_from_ts).total_seconds() / 3600 + period
+        return int((date_to_ts - date_from_ts).total_seconds() / 3600) + period + 1
     elif frequency == 'D':
-        return (date_to_ts - date_from_ts).days + period
+        return (date_to_ts - date_from_ts).days + period + 1
     elif frequency == 'W':
-        return ((date_to_ts - date_from_ts).days + 1) // 7 + period
+        return ((date_to_ts - date_from_ts).days + 1) // 7 + period + 1
     elif frequency == 'M':
-        return (date_to_ts.year - date_from_ts.year) * 12 + date_to_ts.month - date_from_ts.month + period
+        return (date_to_ts.year - date_from_ts.year) * 12 + date_to_ts.month - date_from_ts.month + period + 1
     elif frequency == 'Y':
-        return date_to_ts.year - date_from_ts.year + period
+        return date_to_ts.year - date_from_ts.year + period + 1
 
 def get_actual_values(data, date_from_ts, frequency, period):
     offsets = {
@@ -28,7 +28,11 @@ def get_actual_values(data, date_from_ts, frequency, period):
 
 def create_result_json(forecast,actual):
     result = []
+    print(forecast)
+    print(actual)
     for i in range(len(actual)):
         json = {'point_value': actual.iloc[i], 'point_timestamp': actual.index[i], 'forecast': forecast.iloc[i]}
+        print(json)
         result.append(json)
+    print(result)
     return result

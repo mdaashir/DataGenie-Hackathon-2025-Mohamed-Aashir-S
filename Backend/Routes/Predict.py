@@ -40,9 +40,14 @@ async def classify(
     )
     logging.info(f"Data received: {data}")
 
+    print("query", from_date, to_date, period, frequency)
+    print("data", data)
+
     time_series_data = data.data
     if not time_series_data:
         raise HTTPException(status_code=400, detail="No time series data provided.")
+
+    print("time_series_data", time_series_data)
 
     logging.info(f"Time series data: {time_series_data}")
     mapper = dict(enumerate(MODEL_LIST))
@@ -50,10 +55,24 @@ async def classify(
     # Default model prediction if no model specified
     if model == "":
         try:
-            feature_data = transform(data)
-            feature_data = np.array(feature_data).reshape(1, 96)
+            print("inside", data)
+            print("inside data", time_series_data)
+            df = pd.DataFrame(
+                [(entry.Date, entry.Value) for entry in time_series_data],
+                columns=["Date", "Value"],
+            )
+            print(df)
+            feature_data = extract_features(df)
+            print(feature_data)
+            feature_data.replace(np.nan, 0, inplace=True)
+            feature_data.replace([np.inf, -np.inf], 1e10, inplace=True)
+            feature_data = np.array(feature_data).reshape(1, 46)
+            print(feature_data)
             y_pred = loaded_model.predict(feature_data)
-            predicted_label = list(y_pred[0]).index(max(y_pred[0]))
+            print(y_pred)
+            print(type(y_pred))
+            predicted_label = list(y_pred)[0]
+            print(predicted_label)
             model = mapper[predicted_label]
         except Exception as e:
             logging.error(f"Error during model prediction: {str(e)}")
@@ -80,6 +99,7 @@ async def classify(
 
     # Forecast
     try:
+        print("inside try", ts_data, from_date, to_date, frequency, period, model)
         forecast_json, mape_value = forecast(
             ts_data, from_date, to_date, frequency, period, model
         )
@@ -90,7 +110,9 @@ async def classify(
         )
 
     logging.info(f"Model: {model}, MAPE: {mape_value}, Forecast: {forecast_json}")
+    json = {"model": model, "mape_value": mape_value, "result": forecast_json}
+    print(json)
     return JSONResponse(
-        content={"model": model, "mape_value": mape_value, "result": forecast_json},
+        content=json,
         status_code=status.HTTP_200_OK,
     )
